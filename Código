@@ -1,0 +1,101 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+df = pd.read_excel("Dados_Filmes.xlsx")
+
+## Análise Exploratória dos dados (EDA)
+
+# Ver dimensões do dataset
+print("Dimensões do dataset:", df.shape)
+
+# Verificar valores ausentes
+print("\nValores ausentes por coluna:")
+print(df.isnull().sum())
+
+# Contar gêneros (separados por '|')
+genre_series = df['Gêneros'].dropna().str.split('|').explode()
+genre_counts = genre_series.value_counts()
+
+print("\nGêneros mais frequentes:")
+print(genre_counts)
+
+# Verificar filmes com gênero ou título ausente
+missing_genres = df[df['Gêneros'].isnull()]
+missing_titles = df[df['Título'].isnull()]
+
+print(f"\nFilmes com gênero ausente: {len(missing_genres)}")
+print(f"Filmes com título ausente: {len(missing_titles)}")
+
+# Verificar títulos duplicados
+duplicate_titles = df[df.duplicated(subset='Título', keep=False)]
+print(f"Títulos duplicados encontrados: {len(duplicate_titles)}")
+
+# Ver gêneros únicos
+unique_genres = genre_series.unique()
+print("\nGêneros únicos encontrados:")
+print(unique_genres)
+
+# Gráfico de barras dos gêneros
+genre_df = genre_counts.reset_index()
+genre_df.columns = ['Gênero', 'Contagem']
+
+# Plotar gráfico
+plt.figure(figsize=(12,6))
+sns.barplot(data=genre_df, x='Gênero', y='Contagem', hue='Gênero', palette='viridis', legend=False)
+plt.xticks(rotation=45)
+plt.title('Distribuição dos Gêneros de Filmes')
+plt.xlabel('Gênero')
+plt.ylabel('Quantidade de Filmes')
+plt.tight_layout()
+plt.show()
+
+## 2. Pré-processamento dos Dados (One-Hot Encoding)
+
+# Remover a linha com título ausente
+df_clean = df.dropna(subset=["Título"])
+
+# Aplicar One-Hot Encoding nos gêneros (separados por "|")
+genre_dummies = df_clean['Gêneros'].str.get_dummies(sep='|')
+
+# Concatenar com as colunas de identificação
+df_preprocessed = pd.concat([df_clean[['Filme', 'Título']], genre_dummies], axis=1)
+
+# Visualizar as primeiras linhas da base tratada
+print(df_preprocessed.head())
+
+## 3. Recomendação Baseada em Conteúdo (Similaridade de Gêneros)
+
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Cópia da base tratada para trabalhar
+df_features = df_preprocessed.drop(columns=['Filme'])
+
+# Calcula a matriz de similaridade entre os filmes
+similarity_matrix = cosine_similarity(df_features.drop(columns=['Título']))
+
+# Cria uma função para recomendar filmes
+def recomendar_filmes(titulo_filme, df=df_features, similarity=similarity_matrix, n=10):
+    # Verifica se o título existe
+    if titulo_filme not in df['Título'].values:
+        print("Filme não encontrado.")
+        return
+
+    # Índice do filme informado
+    idx = df[df['Título'] == titulo_filme].index[0]
+
+    # Pega as similaridades da linha correspondente
+    similaridades = list(enumerate(similarity[idx]))
+
+    # Ordena pelas maiores similaridades (exceto ele mesmo)
+    similaridades = sorted(similaridades, key=lambda x: x[1], reverse=True)[1:n+1]
+
+    # Pega os índices dos filmes recomendados
+    filmes_recomendados = [df.iloc[i[0]]['Título'] for i in similaridades]
+
+    print(f"\n🎬 Filmes semelhantes a: **{titulo_filme}**\n")
+    for i, filme in enumerate(filmes_recomendados, 1):
+        print(f"{i}. {filme}")
+
+# Exemplo de uso:
+recomendar_filmes("Space Jam (1996)", n=15)
